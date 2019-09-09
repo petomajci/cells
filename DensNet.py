@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 import torchvision
+import torch.nn.functional as F
 
 class DensNet(nn.Module):
     def __init__(self, num_classes=1000, num_channels=6, pretrained=True):
@@ -28,7 +29,7 @@ class DensNet(nn.Module):
         del preloaded
 
     def forward(self, x):
-        USEBOTHSITES=0
+        USEBOTHSITES=1
 
         if USEBOTHSITES==0:
             features = self.features(x[0])

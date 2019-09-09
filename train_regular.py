@@ -12,28 +12,45 @@ import copy
 import tqdm
 
 # my classes
-import ImagesDS, trainTestSplit, DensNet
+from ImagesDS import ImagesDS
+from trainTestSplit import trainTestSplit
+from DensNet import DensNet
 
 import warnings
 warnings.filterwarnings('ignore')
 
 import sys
 
+groupCode = sys.argv[1]
+modelFile = sys.argv[2]
+trainFile = sys.argv[3]
+Nepochs = sys.argv[4]
 
-
-path_data = '../input'
+path_data = '../../input'
 device = 'cuda'
-batch_size = 16   # was 64
+batch_size = 11   # was 16
 
-ds = ImagesDS('../input/my_extended_train.set', path_data, useBothSites=True)#, useOnly=5536)
-ds_train, ds_val = trainTestSplit(ds, val_share=0.1512762)
-ds_test = ImagesDS(path_data+'/test.csv', path_data, mode='test')
+ds = ImagesDS(trainFile, path_data, useBothSites=False, useOnly=500)
+ds_train, ds_val = trainTestSplit(ds, val_share=0.1468024)
 
 classes = 1108 #1108
 
 model = DensNet(num_classes=classes)
-model.load_state_dict(torch.load('./final_model_512_21.bin'))
-model.eval()  # important to set dropout and normalization layers
+model.load_state_dict(torch.load(f'{modelFile}'))
+
+# set drop rate = 0.5
+if 1==1:
+    DROP_RATE = 0.3
+    for idx1, m in enumerate(model.named_children()):
+        if m[0]=='features':
+            #print(idx1, '->', m[1])
+            for idx2, n in enumerate(m[1].named_children()):
+                if 'denseblock' in n[0]:
+                    print(idx2, '->', n[0])
+                    for idx3, o in enumerate(n[1].named_children()):
+                        #print(idx3, '->', o[0])
+                        o[1].drop_rate=DROP_RATE
+
 
 model.to(device)
 
@@ -52,14 +69,15 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0)
 
 # Decay LR by a factor of 0.5 every 5 epochs
-scheduler = lr_scheduler.StepLR(optimizer, step_size=7, gamma=1.0)
+scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
 
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
-    USEBOTHSITES = 0
+    USEBOTHSITES = 1
 
     best_model_wts = copy.deepcopy(model.state_dict())
+    best_acc = 0.0
     best_loss = 10000000.0
 
     for epoch in range(num_epochs):
@@ -89,7 +107,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 labels = labels.to(device)
 
                 if batch%1000==0:
-                    print(f"Batch: {batch} {time.ctime()} {inputs[0].shape} number of samples:{dataset_sizes[phase]}")
+                    print(f"Batch: {batch} {time.ctime()} {inputs[0].shape} number of samples:{dataset_sizes[phase]} lr:{optimizer.param_groups[0]['lr']}")
                 batch += 1
 
                 # zero the parameter gradients
@@ -124,20 +142,23 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             # deep copy the model
             if phase == 'val' and epoch_loss < best_loss:
                 best_loss = epoch_loss
-                best_model_wts = copy.deepcopy(model.state_dict())
-                torch.save(model.state_dict(), "best_model_regular.bin")
+                #best_model_wts = copy.deepcopy(model.state_dict())
+                torch.save(model.state_dict(), f"best_model_regular_loss{groupCode}.bin")
+            if phase == 'val' and epoch_acc > best_acc:
+                best_acc = epoch_acc
+                torch.save(model.state_dict(), f"best_model_regular_acc{groupCode}.bin")
 
         print()
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
-    print('Best val Acc: {:4f}'.format(best_loss))
+    print('Best val Acc: {:4f}'.format(best_acc))
+    print('Best val Loss: {:4f}'.format(best_loss))
 
     # load best model weights
     model.load_state_dict(best_model_wts)
     return model
 
 
-model = train_model(model, criterion, optimizer, scheduler, num_epochs=100)
-torch.save(model.state_dict(), "final_model2.bin")
-
+model = train_model(model, criterion, optimizer, scheduler, num_epochs=int(Nepochs))
+torch.save(model.state_dict(), f'final_model_{groupCode}.bin')
