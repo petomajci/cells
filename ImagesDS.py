@@ -143,7 +143,7 @@ class ImagesDS(D.Dataset):
             site = (index % 2) + 1
         else:
             my_index = index
-            # use sie from the input parameter
+            # use site from the input parameter
 
         experiment, well, plate = self.records[my_index].experiment, self.records[my_index].well, self.records[
             my_index].plate
@@ -151,7 +151,7 @@ class ImagesDS(D.Dataset):
         return '/'.join([self.img_dir, self.mode, experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])
 
     def __getitem__(self, index):
-        GETBOTHSITES = 0
+        GETBOTHSITES = 1
 
         paths = [self._get_img_path(index, ch) for ch in self.channels]
         if GETBOTHSITES == 1:
@@ -172,20 +172,26 @@ class ImagesDS(D.Dataset):
             cellLine[2] = 1
         if 'U2OS' in experiment:
             cellLine[3] = 1
-        # cellLine = cellLine.long()
+        
+
+        normalize = T.Normalize(mean=[0.485, 0.485, 0.485, 0.485, 0.485, 0.485, ],
+                                std=[0.229, 0.229, 0.229, 0.229, 0.229, 0.229, ])
+
         r1 = random.randint(0, 4)
         r2 = random.randint(0, 2)
         r3 = random.randint(0, 2)
         img = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths])
-
         img = self._correct_overlaping_channels(img)
-
-        normalize = T.Normalize(mean=[0.485, 0.485, 0.485, 0.485, 0.485, 0.485, ],
-                                std=[0.229, 0.229, 0.229, 0.229, 0.229, 0.229, ])
         img = normalize(img)
 
         if GETBOTHSITES == 1:
+            r1 = random.randint(0, 4)
+            r2 = random.randint(0, 2)
+            r3 = random.randint(0, 2)
             img2 = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths2])
+            img2 = self._correct_overlaping_channels(img2)
+            img2 = normalize(img2)
+
             if self.mode == 'train':
                 return [img, img2, cellLine], self.records[index // dd].sirna
             else:
