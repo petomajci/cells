@@ -26,7 +26,7 @@ class DensNet(nn.Module):
             #self.features.conv0.weight = nn.Parameter(torch.cat((w,
             #                        0.5*(w[:,:1,:,:]+w[:,2:,:,:])),dim=1))
 
-        self.classifier = nn.Bilinear(1024,4, num_classes, bias=True) #grow=16,121 ->516, 121 -> 1024, 201->1920, 264->2688
+        #self.classifier = nn.Bilinear(1024,4, num_classes, bias=True) #grow=16,121 ->516, 121 -> 1024, 201->1920, 264->2688
         del preloaded
 
     def forward(self, x):
@@ -36,19 +36,19 @@ class DensNet(nn.Module):
             features = self.features(x[0])
             features1 = F.relu(features, inplace=True)
             features1 = F.adaptive_avg_pool2d(features1, (1, 1)).view(features.size(0), -1)
-            out = self.classifier(features1,x[1])
-            #return features1#, out
-            return out
+            #out = self.classifier(features1,x[1])
+            return features1#, out
+            #return out
         else:
             features = self.features(x[0])
             out = F.relu(features, inplace=True)
             out = F.adaptive_avg_pool2d(out, (1, 1)).view(features.size(0), -1)
-            out = self.classifier(out,x[2])
+            #out = self.classifier(out,x[2])
 
             features1 = self.features(x[1])
             out1 = F.relu(features1, inplace=True)
             out1 = F.adaptive_avg_pool2d(out1, (1, 1)).view(features1.size(0), -1)
-            out1 = self.classifier(out1,x[2])
+            #out1 = self.classifier(out1,x[2])
 
             #return torch.max(torch.cat((out.unsqueeze(1), out1.unsqueeze(1)), dim=1),1)[0]
             return torch.sum(torch.cat((out.unsqueeze(1), out1.unsqueeze(1)), dim=1),1)

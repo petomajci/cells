@@ -147,7 +147,7 @@ class ImagesDS(D.Dataset):
 
             return transform(img)
 
-    def _get_img_path(self, index, channel, site=1):
+    def _get_img_path(self, index, channel, site=1, negative=False):
         if self.useBothSites:
             my_index = index // 2
             site = (index % 2) + 1
@@ -158,17 +158,20 @@ class ImagesDS(D.Dataset):
         experiment, well, plate = self.records[my_index].experiment, self.records[my_index].well, self.records[
             my_index].plate
 
+        if negative==True:
+            well = self.records[my_index].negative
+
         mode = self.mode
         if self.mode == 'val':
             mode = 'train'
         return '/'.join([self.img_dir, mode, experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])
 
     def __getitem__(self, index):
-        GETBOTHSITES = 0
+        GETBOTHSITES = 1
 
         paths = [self._get_img_path(index, ch) for ch in self.channels]
         if GETBOTHSITES == 1:
-            paths2 = [self._get_img_path(index, ch, site=2) for ch in self.channels]
+            paths2 = [self._get_img_path(index, ch, negative=True) for ch in self.channels]
 
         if self.useBothSites:
             dd = 2

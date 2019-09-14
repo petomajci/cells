@@ -12,9 +12,9 @@ import copy
 import tqdm
 
 # my classes
-from ImagesDS import ImagesDS
+from ImagesDS_negative import ImagesDS
 from trainTestSplit import trainTestSplit
-from DensNet import DensNet
+from DensNet_negative import DensNet
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -30,10 +30,10 @@ path_data = '../../input'
 device = 'cuda'
 batch_size = 11   # was 16
 
-ds = ImagesDS(trainFile, path_data, useBothSites=False)#, useOnly=500)
+ds = ImagesDS(trainFile, path_data, useBothSites=True)#, useOnly=500)
 #ds_train, ds_val = trainTestSplit(ds, val_share=0.1468024)
-#ds_train, _ = trainTestSplit(ds, val_share=0.125)
-ds_train, ds_val = trainTestSplit(ds, val_share=0.02436053)
+ds_train, ds_val = trainTestSplit(ds, val_share=0.125)
+#ds_train, ds_val = trainTestSplit(ds, val_share=0.02436053)
 
 #ds2 = ImagesDS(trainFile, path_data, useBothSites=False,mode='val')
 #_, ds_val = trainTestSplit(ds2, val_share=0.125)
@@ -43,7 +43,6 @@ classes = 61 # 30 - HUVEC30 # controls 31 # 61 - HUVEC+CONTROLS # 1108
 model = DensNet(num_classes=classes, pretrained=True)
 if modelFile != 'none':
     model.load_state_dict(torch.load(f'{modelFile}'))
-    model.eval()
 
 # set drop rate = 0.5
 if 1==0:

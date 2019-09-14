@@ -30,10 +30,10 @@ path_data = '../../input'
 device = 'cuda'
 batch_size = 11   # was 16
 
-ds = ImagesDS(trainFile, path_data, useBothSites=False)#, useOnly=500)
+ds = ImagesDS(trainFile, path_data, useBothSites=True)#, useOnly=500)
 #ds_train, ds_val = trainTestSplit(ds, val_share=0.1468024)
-#ds_train, _ = trainTestSplit(ds, val_share=0.125)
-ds_train, ds_val = trainTestSplit(ds, val_share=0.02436053)
+ds_train, ds_val = trainTestSplit(ds, val_share=0.125)
+#ds_train, ds_val = trainTestSplit(ds, val_share=0.02436053)
 
 #ds2 = ImagesDS(trainFile, path_data, useBothSites=False,mode='val')
 #_, ds_val = trainTestSplit(ds2, val_share=0.125)
@@ -83,7 +83,7 @@ scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.75)
 
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
-    USEBOTHSITES = 1
+    USEBOTHSITES = 0
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
