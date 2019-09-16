@@ -13,7 +13,7 @@ import torchvision
 from torchvision import transforms as T
 
 # my classes
-from cosface import LMCL_loss
+from cosface2D import LMCL_loss2D
 from ImagesDS import ImagesDS
 from trainTestSplit import trainTestSplit
 from DensNet_forCosFace import DensNet
@@ -31,8 +31,9 @@ import sys
 
 groupCode = sys.argv[1]
 modelFile = sys.argv[2]
-trainFile = sys.argv[3]
-Nepochs = int(sys.argv[4])
+centersFile = sys.argv[3]
+trainFile = sys.argv[4]
+Nepochs = int(sys.argv[5])
 
 ####
 
@@ -42,7 +43,7 @@ batch_size = 22
 
 ###
 
-ds = ImagesDS(f'{trainFile}', path_data, useBothSites=True)#, useOnly=5536)
+ds = ImagesDS(trainFile, path_data, useBothSites=True)#, useOnly=5536)
 #ds_train, ds_val = trainTestSplit(ds, val_share=0.1512762)
 ds_train, ds_val = trainTestSplit(ds, val_share=0.1)
 
@@ -51,7 +52,7 @@ ds_train, ds_val = trainTestSplit(ds, val_share=0.1)
 classes = 31 #1108
 model = DensNet(num_classes=classes, pretrained=False)
 if modelFile != 'none':
-    model.load_state_dict(torch.load(f'{modelFile}'))
+    model.load_state_dict(torch.load(modelFile))
     model.eval();  # important to set dropout and normalization layers
 
 model.to(device);
@@ -70,9 +71,10 @@ del loader, vloader
 # NLLLoss
 nllloss = nn.CrossEntropyLoss()
 # CenterLoss
-lmcl_loss = LMCL_loss(num_classes=classes, feat_dim=1024, s=32, m=0.2)
+lmcl_loss = LMCL_loss2D(num_classes=classes, feat_dim=1024, s=32, m=0.2)
 print(lmcl_loss.centers.shape)
-#lmcl_loss.load_state_dict(torch.load('../input/model-512-14epochs/final_centers_tmp.bin'))
+if centersFile != 'none':
+     lmcl_loss.load_state_dict(torch.load(centersFile))
 
 #use_cuda:
 nllloss = nllloss.cuda()
@@ -149,8 +151,8 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                     #outputs = model(inputs)
                     #print(inputs[1].shape)
 
-                    logits, mlogits = criterion[1](features, labels)  # 1D cosFace
-		    #logits, mlogits = criterion[1](features, labels, inputs[1])  # 2D cosFace
+                    #logits, mlogits = criterion[1](features, labels)  # 1D cosFace
+                    logits, mlogits = criterion[1](features, labels, inputs[1])  # 2D cosFace
                     loss = criterion[0](mlogits, labels)
 
                     _, preds = torch.max(logits.data, 1)

@@ -11,7 +11,7 @@ class LMCL_loss2D(nn.Module):
         """
 
     def __init__(self, num_classes, feat_dim, s=7.00, m=0.2, NcellLines = 4):
-        super(LMCL_loss, self).__init__()
+        super(LMCL_loss2D, self).__init__()
         self.feat_dim = feat_dim
         self.num_classes = num_classes
         self.s = s
@@ -27,9 +27,11 @@ class LMCL_loss2D(nn.Module):
         #batchCenters = self.centers
         batchCenters = torch.matmul(self.centers, torch.transpose(cellLine,0,1))
         #print(batchCenters.shape)
-        norms_c = torch.norm(batchCenters, p=2, dim=-1, keepdim=True)
+        norms_c = torch.norm(batchCenters, p=2, dim=1, keepdim=True)
+        #print(norms_c.shape)
         ncenters = torch.div(batchCenters, norms_c)
-        
+        #print(ncenters.shape)        
+
         #logits = torch.matmul(nfeat, torch.transpose(ncenters, 0, 1))
         logits = torch.matmul(nfeat, torch.transpose(ncenters, 0, 2)) # Nbatch * Nbatch * Nclasses
         l2 = torch.diagonal(logits,0,dim1=0,dim2=1)

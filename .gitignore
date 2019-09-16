@@ -1,1 +1,6 @@
 *.bin
+*.csv
+*.set
+cc
+tmp
+__pycache__

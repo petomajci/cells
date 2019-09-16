@@ -14,7 +14,7 @@ import PIL.ImageOps as ImageOps
 import torchvision
 from torchvision import transforms as T
 
-class ImagesDS(D.Dataset):
+class ImagesDS_controls(D.Dataset):
     def __init__(self, csv_file, img_dir, mode='train', useBothSites=True, channels=[1, 2, 3, 4, 5, 6], useOnly=0):
 
         df = pd.read_csv(csv_file)
@@ -69,7 +69,7 @@ class ImagesDS(D.Dataset):
 
     @staticmethod
     def _correct_overlaping_channels(img):
-        img = ImagesDS._remove_artifacts(img)
+        img = ImagesDS_controls._remove_artifacts(img)
         # return img
         tt = 0.1
         # CORRECT OVERLAPPING CHANNELS
@@ -165,7 +165,7 @@ class ImagesDS(D.Dataset):
         return '/'.join([self.img_dir, 'train', experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])  # all files were moved to train
 
     def __getitem__(self, index):
-        GETBOTHSITES = 0
+        GETBOTHSITES = 1
 
         paths = [self._get_img_path(index, ch) for ch in self.channels]
         if GETBOTHSITES == 1:
@@ -175,8 +175,10 @@ class ImagesDS(D.Dataset):
             dd = 2
         else:
             dd = 1
+        myInd = index // dd	
 
-        experiment = self.records[index // dd].experiment
+
+        experiment = self.records[myInd].experiment
         cellLine = torch.FloatTensor([0, 0, 0, 0])
         if 'HEPG2' in experiment:
             cellLine[0] = 1
@@ -199,9 +201,11 @@ class ImagesDS(D.Dataset):
         #img = ImagesDS._add_noise(img)
            #img2 = ImagesDS._add_noise(img)
            #print(np.corrcoef(img1[1,:,:].numpy().reshape((262144,)),img2[1,:,:].numpy().reshape((1,262144))))	   
-        img = ImagesDS._correct_overlaping_channels(img)
+        img = ImagesDS_controls._correct_overlaping_channels(img)
         img = normalize(img)
 
+        controls1 = torch.from_numpy(np.array([self.records[myInd].C1_1,self.records[myInd].C2_1,self.records[myInd].C3_1,self.records[myInd].C4_1,self.records[myInd].C5_1,self.records[myInd].C6_1,self.records[myInd].C7_1,self.records[myInd].C8_1,self.records[myInd].C9_1,self.records[myInd].C10_1,self.records[myInd].C11_1,self.records[myInd].C12_1,self.records[myInd].C13_1,self.records[myInd].C14_1,self.records[myInd].C15_1,self.records[myInd].C16_1,self.records[myInd].C17_1,self.records[myInd].C18_1,self.records[myInd].C19_1,self.records[myInd].C20_1,self.records[myInd].C21_1,self.records[myInd].C22_1,self.records[myInd].C23_1,self.records[myInd].C24_1,self.records[myInd].C25_1,self.records[myInd].C26_1,self.records[myInd].C27_1,self.records[myInd].C28_1,self.records[myInd].C29_1,self.records[myInd].C30_1,self.records[myInd].C31_1])).float()
+        controls2 = torch.from_numpy(np.array([self.records[myInd].C1_2,self.records[myInd].C2_2,self.records[myInd].C3_2,self.records[myInd].C4_2,self.records[myInd].C5_2,self.records[myInd].C6_2,self.records[myInd].C7_2,self.records[myInd].C8_2,self.records[myInd].C9_2,self.records[myInd].C10_2,self.records[myInd].C11_2,self.records[myInd].C12_2,self.records[myInd].C13_2,self.records[myInd].C14_2,self.records[myInd].C15_2,self.records[myInd].C16_2,self.records[myInd].C17_2,self.records[myInd].C18_2,self.records[myInd].C19_2,self.records[myInd].C20_2,self.records[myInd].C21_2,self.records[myInd].C22_2,self.records[myInd].C23_2,self.records[myInd].C24_2,self.records[myInd].C25_2,self.records[myInd].C26_2,self.records[myInd].C27_2,self.records[myInd].C28_2,self.records[myInd].C29_2,self.records[myInd].C30_2,self.records[myInd].C31_2])).float()
         if GETBOTHSITES == 1:
             r1 = random.randint(0, 4)
             r2 = random.randint(0, 2)
@@ -209,15 +213,15 @@ class ImagesDS(D.Dataset):
             img2 = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths2])
             #if self.mode=='train':
             #img2 = ImagesDS._add_noise(img2)
-            img2 = ImagesDS._correct_overlaping_channels(img2)
+            img2 = ImagesDS_controls._correct_overlaping_channels(img2)
             img2 = normalize(img2)
 
             if self.mode == 'train':
-                return [img, img2, cellLine], self.records[index // dd].sirna
+                return [img, img2, controls1, controls2, cellLine], self.records[index // dd].sirna
             elif self.mode =='val':
-                return [img, img2, cellLine], self.records[index // dd].sirna
+                return [img, img2, controls1, controls2, cellLine], self.records[index // dd].sirna
             else:
-                return [img, img2, cellLine], 0
+                return [img, img2, controls1, controls2, cellLine], 0
         else:
             if self.mode == 'train':
                 return [img, cellLine], self.records[index // dd].sirna
