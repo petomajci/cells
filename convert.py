@@ -7,30 +7,34 @@ import PIL.ImageChops as ImageChops
 from PIL import Image
 from PIL import ImageFilter
 
+import time
 import cv2
 import tensorflow as tf
 
 DEFAULT_BASE_PATH = '../input'
 DEFAULT_CHANNELS = (1, 2, 3, 4, 5, 6)
 
-def load_image(image_path):
+def load_image(image_path, blur = False):
     #with tf.io.gfile.GFile(image_path, 'rb') as f:
     #    return imread(f, format='png')
+    #print(image_path)
     with tf.io.gfile.GFile(image_path, 'rb') as f:
         im = Image.open(f)
-        im = im.filter(ImageFilter.BLUR)
+        if blur:
+            #print('warning: Loading with blur')
+            im = im.filter(ImageFilter.BLUR)
         #im = ImageChops.subtract(im, ImageChops.constant(im, 10))
         #return ImageOps.autocontrast(im, cutoff=1, ignore=None)
         return im #ImageOps.equalize(im)
 
 
-def load_images_as_tensor(image_paths, dtype=np.uint8):
+def load_images_as_tensor(image_paths, dtype=np.uint8, blur=False):
     n_channels = len(image_paths)
 
     data = np.ndarray(shape=(512, 512, n_channels), dtype=dtype)
 
     for ix, img_path in enumerate(image_paths):
-        data[:, :, ix] = load_image(img_path)
+        data[:, :, ix] = load_image(img_path, blur=blur)
         
     return data
 
@@ -52,14 +56,19 @@ def load_site(dataset,
               well,
               site,
               channels=DEFAULT_CHANNELS,
-              base_path=DEFAULT_BASE_PATH):
+              base_path=DEFAULT_BASE_PATH,
+              blur = False):
     
     channel_paths = [
         image_path(
             dataset, experiment, plate, well, site, c, base_path=base_path)
         for c in channels
     ]
-    return load_images_as_tensor(channel_paths)
+    #print(channel_paths[0])
+    if os.path.isfile(channel_paths[0]):
+        return load_images_as_tensor(channel_paths, blur=blur)
+    else:
+        return None
 
 RGB_MAP = {
         1: {
@@ -163,70 +172,74 @@ def convert_tensor_to_rgb(t, channels=range(1,7), vmax=255, rgb_map=RGB_MAP):
 
 # MAIN
 
-channels = (1,5,6)
+channels = (1,2,4)
 #channels = (4,5,6)
 cell='U2OS'
 
 import sys
 
 inputFile = sys.argv[1]
-inputFile2 = sys.argv[2]
-location = sys.argv[3]
-destination = sys.argv[4]
+location = sys.argv[2]
+destination = sys.argv[3]
 
 df = pd.read_csv(inputFile)
 records = df.to_records(index=False)
 
-df2 = pd.read_csv(inputFile2)
-records2 = df2.to_records(index=False)
-
-print(df.shape[0])
-
-a = np.array([0,0,0])
-b = np.array([0,0,0])
-for i in (1,):#range(df.shape[0]):
-    for site in (1,2):
-        t1 = load_site(location, records[i].experiment, records[i].plate, records[i].well, site)
-        t2 = load_site(location, records2[i].experiment, records2[i].plate, records2[i].well, site)
-        print(f'{records[i].sirna}-{records[i].id_code}-{records[i].plate}_{site}')
-        #t1[np.where(t1[:,:,0]==1)]=100
-        for j in range(3):
-            print(f'{j}   {np.count_nonzero(t1[:,:,j] == 0)}   {np.count_nonzero(t1[:,:,j] == 1)} {np.count_nonzero(t1[:,:,j] == 2)}   {np.count_nonzero(t1[:,:,j] == 3)}   {np.count_nonzero(t1[:,:,j] == 4)}   {np.count_nonzero(t1[:,:,j] == 5)}')
-            a[j] += np.mean(t1[:,:,j])
-            b[j] += np.mean(t2[:,:,j])
-
-print(a/df.shape[0])
-print(b/df.shape[0])
-Ca = 50/(a/df.shape[0])
-Cb = 50/(b/df.shape[0])
-print(Ca)
-print(Cb)
-
 from scipy import ndimage
 import matplotlib.pyplot as plt
 
+
+def getNumberOfCells(x, threshold, minSize, maxSize):
+    x[np.where((threshold<=x) )]=255
+    x[np.where(x<255)]=0
+    blobs, number_of_blobs = ndimage.label(x)
+
+    ss = 0
+    for l in range(number_of_blobs):
+        s = np.sum(blobs==(l+1))
+        if s>minSize and s<maxSize:     # channel 0
+            w = np.where(blobs==(l+1))
+            xx = w[0]
+            yy = w[1]
+            if (max(xx)-min(xx))*(max(yy)-min(yy)) < s*2.5:
+                ss+=1
+
+    return ss
+
+
+def MoveAllChannelsToZero(inputTensor):
+    x = inputTensor[:,:,0]
+    x = np.where(x<=7, 0, x-7)
+    inputTensor[:,:,0] = x
+
+    
+    # move min value of each channel to 0
+    for ch in range(6):
+        inputTensor[:,:,ch] -= np.min(inputTensor[:,:,ch])
+        while np.sum(t1[:,:,ch]==0)<2000:   # there shall be at least 2000 empty pixels in each channel
+            inputTensor[:,:,ch] = np.where(inputTensor[:,:,ch]==0,0,inputTensor[:,:,ch]-1)
+    return inputTensor
+
+########################################
+#   MAIN program
+########################################
+
+
 for i in range(df.shape[0]):
-    for site in (1,):
+
+    correctionF = np.zeros((2,6))
+
+    for site in (1,2):
         k = i#22
-        channel = 1
-        t1 = load_site(location, records[k].experiment, records[k].plate, records[k].well, site)
-        t2 = np.copy(t1) #load_site(location, records2[i].experiment, records2[i].plate, records2[i].well, site)
-        x = t1[:,:,0]
-        x = np.where(x<=7, 0, x-7)
-        #x[np.where(x==1)]=255
-        t1[:,:,0] = x
-        max_ss = 0
-        max_thr = 0
+        t1 = load_site(location, records[k].experiment, records[k].plate, records[k].well, site, blur=True)
       
         # move min value of each channel to 0
-        for ch in range(6):
-            t1[:,:,ch] -= np.min(t1[:,:,ch])
-            while np.sum(t1[:,:,ch]==0)<2000:   # there shall be at least 1000 empty pixels in each channel
-                #print(np.sum(t1[:,:,ch]==0))
-                t1[:,:,ch] = np.where(t1[:,:,ch]==0,0,t1[:,:,ch]-1) 
+        t1 = MoveAllChannelsToZero(t1)
 
-        for thr in range(1,55): 
-            x = np.copy(t1[:,:,channel])
+        max_ss = 0
+        max_thr = 0
+        for thr in range(1,70): 
+            x = np.copy(t1[:,:,1])
             x[np.where((thr<=x) )]=255
             x[np.where(x<255)]=0
             blobs, number_of_blobs = ndimage.label(x)
@@ -261,7 +274,7 @@ for i in range(df.shape[0]):
             if ss<max_ss-10:  # to speed things up
                 break
 
-        max_ss = 0
+        max_ss2 = 0
         max_thr2 = 0
         for thr in range(1,185):
             x = np.copy(t1[:,:,0])
@@ -292,18 +305,18 @@ for i in range(df.shape[0]):
             #cv2.imwrite(f'{destination}/{records[i].sirna}-{records[i].id_code}-{records[i].plate}_{thr}.jpg',x)
             
             
-            if ss>=max_ss:
-                max_ss = ss
+            if ss>=max_ss2:
+                max_ss2 = ss
                 max_thr2 = thr
 
-            if ss<max_ss-15:  # to speed things up
+            if ss<max_ss2-15:  # to speed things up
                 break
 
 
         x = np.copy(t1[:,:,2])  # aktin... take median norm
         median = np.mean(x[np.where(x>0)])
-        mm = np.median(x[np.where(x>0)])
-        print(f"{records[i].id_code}-{records[i].plate}.1  {max_thr}  {max_thr2}  {median}  {mm}")
+        #mm = np.median(x[np.where(x>0)])
+        print(f"{records[i].id_code}-{records[i].plate}.1  {max_thr}  {max_thr2}  {median}  {max_ss}  {max_ss2}  {time.ctime()}")
         #print(f'{np.sum(x<1)} {np.sum(x==1)}  {np.sum(x>1)} {np.sum(x==0)}')
         #import matplotlib.pyplot as plt
         #plt.imshow(blobs)
@@ -312,35 +325,81 @@ for i in range(df.shape[0]):
         #blobs[np.where(blobs>1)]=1
         #t1[:,:,channel] = x * blobs
 
-        
+        # reload without blur 
+        t1 = load_site(location, records[k].experiment, records[k].plate, records[k].well, site, blur=False)
+
+        # move to zero
+        t1 = MoveAllChannelsToZero(t1)
+        t2 = np.copy(t1)
+
         t1 = t1.astype(np.float32)
         t2 = t2.astype(np.float32)
-        
-        t2[:,:,0] *= 3#Ca[j]
-        t1[:,:,0] *= (60/(max_thr2+1))#Ca[j]
+       
+        C = 20 # 60
 
-        t2[:,:,1] *= 3#Ca[j]
-        t1[:,:,1] *= (60/(max_thr+1))#Ca[j]
+        correctionF[site-1,0] = max_thr2+1
+        correctionF[site-1,1] = max_thr+1
+        correctionF[site-1,2] = median
+        correctionF[site-1,3] = max_thr+1
+
+        #t1[:,:,3] = np.where(t1[:,:,0]<max_thr2,0,t1[:,:,3]) # filter only for nucleus
+
+
+        t2[:,:,0] *= 20/8.5
+        t1[:,:,0] *= (C/(max_thr2+1))
+
+        t2[:,:,1] *= 20/17
+        t1[:,:,1] *= (C/(max_thr+1))
         
-        t2[:,:,2] *= 3#Ca[j]
-        t1[:,:,2] *= (60/median)#Ca[j]
+        t2[:,:,2] *= 20/7.47
+        t1[:,:,2] *= (C/median)
         
-        #for j in (4,5):
-        #    t2[:,:,j] *= 3#Ca[j]
-        #    t1[:,:,j] *= (60/(max_thr+1))#Ca[j]
-        t1[:,:,3] = np.where(t1[:,:,0]<max_thr,0,t1[:,:,3]) # filter only for nucleus
-        
-        for j in (3,4,5):
+        t2[:,:,3] *= 20/17
+        t1[:,:,3] *= (C/(max_thr+1))
+
+        for j in (4,5):
           x = t1[:,:,j]
           mean2 = np.mean(x[np.where(x>0)])
-          t2[:,:,j] *= 3
-          t1[:,:,j] *= 60/mean2
-        print(f'MEANS:  {np.mean(t1[:,:,0])}  {np.mean(t1[:,:,1])}  {np.mean(t1[:,:,2])}   {np.mean(t1[:,:,3])}  {np.mean(t1[:,:,4])}  {np.mean(t1[:,:,5])}')
-        #print(Ca.shape)
-        t = np.concatenate((t2,t1),axis=1)
-        x = convert_tensor_to_rgb(t,channels=channels, rgb_map = RGB_MAP)
-        cv2.imwrite(f'{destination}/{records[i].sirna}-{records[i].id_code}-{records[i].plate}_{max_thr}_{max_thr2}.jpg',x)
+          correctionF[site-1,j] = mean2
+          t2[:,:,j] *= C/20
+          t1[:,:,j] *= C/mean2
+        #print(f'MEANS:  {np.mean(t1[:,:,0])}  {np.mean(t1[:,:,1])}  {np.mean(t1[:,:,2])}   {np.mean(t1[:,:,3])}  {np.mean(t1[:,:,4])}  {np.mean(t1[:,:,5])}')
+        
+        if 1==1:
+            t = np.concatenate((t2,t1),axis=1)
+            x = convert_tensor_to_rgb(t,channels=channels, rgb_map = RGB_MAP)
+            cv2.imwrite(f'{destination}/{records[i].sirna}-{records[i].id_code}-{records[i].plate}_{max_thr}_{max_thr2}.jpg',x)
 
+        import imageio
+        directory = f'{destination}/{records[i].experiment}/Plate{records[i].plate}'
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        data8 = np.uint8(t1[:,:,0])
+        imageio.imwrite(f'{directory}/{records[i].well}_s{site}_w1.png', data8)
+    
+
+    #print(correctionF)
+    myC = np.mean(correctionF,axis=0)
+
+    if 1==1:
+      for row in ('02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23'):
+        for column in ('B','C','D','E','F','G','H','I','J','K','L','M','N','O'):
+            for site in (1,2):
+                t1 = load_site(location, records[k].experiment, records[k].plate, f'{column}{row}', site, blur=False)
+                if not t1 is None:
+                    t1 = MoveAllChannelsToZero(t1)
+                    t1 = t1.astype(np.float32)
+                    #print(getNumberOfCells(np.copy(t1[:,:,0]),myC[0],200,2000))
+                    #print(getNumberOfCells(np.copy(t1[:,:,1]),myC[1],400,4000))
+                    
+                    #t1[:,:,3] = np.where(t1[:,:,0]<myC[0],0,t1[:,:,3]) # filter only for nucleus
+
+                    for j in range(6):
+                        t1[:,:,j] *= C/myC[j]
+                        data8 = np.uint8(t1[:,:,j])
+                        imageio.imwrite(f'{directory}/{column}{row}_s{site}_w{j+1}.png', data8)
+                    print(f'converted: {location}, {records[k].experiment}, {records[k].plate}, {column}{row} {site}')
+    #exit()
 
 
 exit()
