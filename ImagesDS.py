@@ -190,9 +190,9 @@ class ImagesDS(D.Dataset):
         normalize = T.Normalize(mean=[0.485, 0.485, 0.485, 0.485, 0.485, 0.485, ],
                                 std=[0.229, 0.229, 0.229, 0.229, 0.229, 0.229, ])
 
-        r1 = random.randint(0, 4)
-        r2 = random.randint(0, 2)
-        r3 = random.randint(0, 2)
+        r1 = random.randint(0, 3)
+        r2 = random.randint(0, 1)
+        r3 = random.randint(0, 1)
         img = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths])
         #if self.mode=='train':
         #img = ImagesDS._add_noise(img)
@@ -202,9 +202,9 @@ class ImagesDS(D.Dataset):
         img = normalize(img)
 
         if GETBOTHSITES == 1:
-            r1 = random.randint(0, 4)
-            r2 = random.randint(0, 2)
-            r3 = random.randint(0, 2)
+            r1 = random.randint(0, 3)
+            r2 = random.randint(0, 1)
+            r3 = random.randint(0, 1)
             img2 = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths2])
             #if self.mode=='train':
             #img2 = ImagesDS._add_noise(img2)

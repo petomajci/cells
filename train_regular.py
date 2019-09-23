@@ -31,53 +31,36 @@ device = 'cuda'
 batch_size = 11   # was 16
 
 ds = ImagesDS(trainFile, path_data, useBothSites=False)#, useOnly=500)
-#ds_train, ds_val = trainTestSplit(ds, val_share=0.1468024)
-#ds_train, _ = trainTestSplit(ds, val_share=0.125)
 ds_train, ds_val = trainTestSplit(ds, val_share=0.02436053)
 
-#ds2 = ImagesDS(trainFile, path_data, useBothSites=False,mode='val')
-#_, ds_val = trainTestSplit(ds2, val_share=0.125)
-
-classes = 61 # 30 - HUVEC30 # controls 31 # 61 - HUVEC+CONTROLS # 1108
+classes = 1108 # 30 - HUVEC30 # controls 31 # 61 - HUVEC+CONTROLS # 1108
 
 model = DensNet(num_classes=classes, pretrained=True)
 if modelFile != 'none':
     model.load_state_dict(torch.load(f'{modelFile}'))
     model.eval()
-
-# set drop rate = 0.5
-if 1==0:
-    DROP_RATE = 0.3
-    for idx1, m in enumerate(model.named_children()):
-        if m[0]=='features':
-            #print(idx1, '->', m[1])
-            for idx2, n in enumerate(m[1].named_children()):
-                if 'denseblock' in n[0]:
-                    #print(idx2, '->', n[0])
-                    for idx3, o in enumerate(n[1].named_children()):
-                        #print(idx3, '->', o[0])
-                        o[1].drop_rate=DROP_RATE
-
-
 model.to(device)
 
-loader = D.DataLoader(ds_train, batch_size=batch_size, shuffle=True, num_workers=4)
-vloader = D.DataLoader(ds_val, batch_size=batch_size, shuffle=True, num_workers=4)
-#tloader = D.DataLoader(ds_test, batch_size=batch_size, shuffle=False, num_workers=2)
+def worker_init_fn(worker_id):                                                          
+     np.random.seed(np.random.get_state()[1][0] + worker_id)
+
+loader = D.DataLoader(ds_train, batch_size=batch_size, shuffle=True, num_workers=4, worker_init_fn=worker_init_fn)
+vloader = D.DataLoader(ds_val, batch_size=batch_size, shuffle=True, num_workers=4, worker_init_fn=worker_init_fn)
 
 dataLoaders = {'train': loader, 'val':vloader}
 dataset_sizes = {'train':len(ds_train), 'val':len(ds_val)}
 del loader, vloader
 
 
-criterion = nn.BCEWithLogitsLoss()
-#criterion = nn.CrossEntropyLoss()
+#criterion = nn.BCEWithLogitsLoss()
+criterion = nn.CrossEntropyLoss()
 
+lr=0.001
 #optimizer = torch.optim.Adam(model.parameters(), lr=1.5625e-05, weight_decay=0)
-optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.05)
+optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.05)
 #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.01, momentum=0)
 
-# Decay LR by a factor of 0.5 every 5 epochs
+# Decay LR by a factor of 0.75 every 5 epochs
 scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.75)
 
 
