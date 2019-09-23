@@ -114,16 +114,14 @@ class ImagesDS_controls(D.Dataset):
         return img
 
     @staticmethod
-    def _load_img_as_tensor(file_name, r1, r2, r3, noiseLevel=0):
-        output_size = 224
+    def _load_img_as_tensor(file_name, r1, r2, r3, xstart=0, ystart=0, height=512, noiseLevel=0):
+        output_size = 512
 
         with Image.open(file_name) as img:
-            # minV, maxV = img.getextrema()
-            # print (minV, maxV, file_name)
-            # normalize = T.Normalize(mean=[minV,],std=[(maxV-minV/255),])
+            #img = T.functional.crop(img, xstart, ystart, height, height)
+            #img = T.functional.resize(img,output_size)
 
             angle = r1 * 90
-
             img = T.functional.rotate(img, angle)
             if r2 == 1:
                 img = T.functional.hflip(img)
@@ -135,14 +133,7 @@ class ImagesDS_controls(D.Dataset):
                 img = ImageChops.subtract(img, ImageChops.constant(img, noiseLevel))
             # Contrast stretching
             img = ImageOps.autocontrast(img, cutoff=1, ignore=None)
-            # i = np.random.uniform(0,199)
-            # j = np.random.uniform(0,199)
-            # img = T.functional.crop(img, i, j, 312, 312)
 
-            # img = T.functional.resize(img,output_size)
-
-            # transform = T.Compose([T.ToTensor(), normalize])
-            # transform = T.Compose([T.RandomVerticalFlip(), T.RandomHorizontalFlip(), T.ToTensor(), normalize])
             transform = T.ToTensor()
 
             return transform(img)
@@ -165,7 +156,7 @@ class ImagesDS_controls(D.Dataset):
         return '/'.join([self.img_dir, 'train', experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])  # all files were moved to train
 
     def __getitem__(self, index):
-        GETBOTHSITES = 1
+        GETBOTHSITES = 0
 
         paths = [self._get_img_path(index, ch) for ch in self.channels]
         if GETBOTHSITES == 1:
@@ -175,7 +166,7 @@ class ImagesDS_controls(D.Dataset):
             dd = 2
         else:
             dd = 1
-        myInd = index // dd	
+        myInd = index // dd
 
 
         experiment = self.records[myInd].experiment
@@ -196,11 +187,14 @@ class ImagesDS_controls(D.Dataset):
         r1 = random.randint(0, 4)
         r2 = random.randint(0, 2)
         r3 = random.randint(0, 2)
-        img = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths])
+        xstart = int(np.random.uniform(0,111))
+        ystart = int(np.random.uniform(0,111))
+        height = int(np.random.uniform(400,511)) - max(xstart, ystart)+1
+        img = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3, xstart, ystart, height) for img_path in paths])
         #if self.mode=='train':
         #img = ImagesDS._add_noise(img)
            #img2 = ImagesDS._add_noise(img)
-           #print(np.corrcoef(img1[1,:,:].numpy().reshape((262144,)),img2[1,:,:].numpy().reshape((1,262144))))	   
+           #print(np.corrcoef(img1[1,:,:].numpy().reshape((262144,)),img2[1,:,:].numpy().reshape((1,262144))))   
         img = ImagesDS_controls._correct_overlaping_channels(img)
         img = normalize(img)
 
@@ -210,7 +204,10 @@ class ImagesDS_controls(D.Dataset):
             r1 = random.randint(0, 4)
             r2 = random.randint(0, 2)
             r3 = random.randint(0, 2)
-            img2 = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths2])
+            xstart = int(np.random.uniform(0,111))
+            ystart = int(np.random.uniform(0,111))
+            height = int(np.random.uniform(400,511)) - max(xstart, ystart)+1
+            img2 = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3, xstart, ystart, height) for img_path in paths2])
             #if self.mode=='train':
             #img2 = ImagesDS._add_noise(img2)
             img2 = ImagesDS_controls._correct_overlaping_channels(img2)
@@ -224,9 +221,9 @@ class ImagesDS_controls(D.Dataset):
                 return [img, img2, controls1, controls2, cellLine], 0
         else:
             if self.mode == 'train':
-                return [img, cellLine], self.records[index // dd].sirna
+                return [img, controls1, cellLine], self.records[index // dd].sirna
             else:
-                return [img, cellLine], 0  # self.records[index//dd].id_code
+                return [img, controls1, cellLine], 0  # self.records[index//dd].id_code
 
     def __len__(self):
         """

@@ -29,16 +29,17 @@ Nepochs = sys.argv[4]
 
 path_data = '../../input'
 device = 'cuda'
-batch_size = 11   # was 16
+batch_size = 22   # was 16
 
-ds = ImagesDS_controls(trainFile, path_data, useBothSites=False)#, useOnly=500)
-ds_train, ds_val = trainTestSplit(ds, val_share=0.1468024)
+ds = ImagesDS_controls(trainFile, path_data, useBothSites=True)#, useOnly=500)
+#ds_train, ds_val = trainTestSplit(ds, val_share=0.1468024)
+ds_train, ds_val = trainTestSplit(ds, val_share=0.117234)
 #ds_train, ds_val = trainTestSplit(ds, val_share=0.125)
 #ds_train, ds_val = trainTestSplit(ds, val_share=0.02436053)
 
 classes = 1108 # 30 - HUVEC30 # controls 31 # 61 - HUVEC+CONTROLS # 1108
 
-model = DensNet_controls(num_classes=classes, Ncontrols = 31, pretrained=True)
+model = DensNet_controls(num_classes=classes, Ncontrols = 31, pretrained=False)
 #model1 = DensNet(num_classes=classes, pretrained=True)
 if modelFile != 'none':
     model.load_state_dict(torch.load(f'{modelFile}'))
@@ -53,7 +54,7 @@ if modelFile != 'none':
     #w[:, 0:1024, :] = w1
     #model.classifier.weight = nn.Parameter(w)
 
-# set drop rate = 0.5
+# set drop rate = 0.5 ... just makes it worse...
 if 1==0:
     DROP_RATE = 0.3
     for idx1, m in enumerate(model.named_children()):
@@ -69,29 +70,34 @@ if 1==0:
 
 model.to(device)
 
-loader = D.DataLoader(ds_train, batch_size=batch_size, shuffle=True, num_workers=4)
-vloader = D.DataLoader(ds_val, batch_size=batch_size, shuffle=True, num_workers=4)
-#tloader = D.DataLoader(ds_test, batch_size=batch_size, shuffle=False, num_workers=2)
+def worker_init_fn(worker_id):                                                          
+    np.random.seed(np.random.get_state()[1][0] + worker_id)
+
+loader = D.DataLoader(ds_train, batch_size=batch_size, shuffle=True, num_workers=4, worker_init_fn=worker_init_fn)
+vloader = D.DataLoader(ds_val, batch_size=batch_size, shuffle=True, num_workers=4, worker_init_fn=worker_init_fn)
+#tloader = D.DataLoader(ds_test, batch_size=batch_size, shuffle=False, num_workers=2, worker_init_fn=worker_init_fn)
 
 dataLoaders = {'train': loader, 'val':vloader}
 dataset_sizes = {'train':len(ds_train), 'val':len(ds_val)}
 del loader, vloader
 
 
-criterion = nn.BCEWithLogitsLoss()
-#criterion = nn.CrossEntropyLoss()
+#criterion = nn.BCEWithLogitsLoss()
+criterion = nn.CrossEntropyLoss()
 
+start_learning_rate=0.001
+#start_learning_rate=0.0002373046875
 #optimizer = torch.optim.Adam(model.parameters(), lr=1.5625e-05, weight_decay=0)
-optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.05)
+optimizer = torch.optim.AdamW(model.parameters(), lr=start_learning_rate, weight_decay=0.05)
 #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.01, momentum=0)
 
-# Decay LR by a factor of 0.5 every 5 epochs
+# Decay LR by a factor of 0.75 every 5 epochs
 scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.75)
 
 
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
-    USEBOTHSITES = 1
+    USEBOTHSITES = 0
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
@@ -141,10 +147,10 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 
                     _, preds = torch.max(outputs, 1)
 
-                    #loss = criterion(outputs, labels)
-                    target = torch.zeros_like(outputs, device=device)
-                    target[np.arange(inputs[0].size(0)), labels] = 1
-                    loss = criterion(outputs, target)
+                    loss = criterion(outputs, labels)
+                    #target = torch.zeros_like(outputs, device=device)
+                    #target[np.arange(inputs[0].size(0)), labels] = 1
+                    #loss = criterion(outputs, target)
 
                     # backward + optimize only if in training phase
                     if phase == 'train':

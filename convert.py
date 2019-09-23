@@ -9,23 +9,19 @@ from PIL import ImageFilter
 
 import time
 import cv2
-import tensorflow as tf
 
-DEFAULT_BASE_PATH = '../input'
+DEFAULT_BASE_PATH = '../../input'
 DEFAULT_CHANNELS = (1, 2, 3, 4, 5, 6)
 
 def load_image(image_path, blur = False):
-    #with tf.io.gfile.GFile(image_path, 'rb') as f:
-    #    return imread(f, format='png')
     #print(image_path)
-    with tf.io.gfile.GFile(image_path, 'rb') as f:
-        im = Image.open(f)
-        if blur:
-            #print('warning: Loading with blur')
-            im = im.filter(ImageFilter.BLUR)
-        #im = ImageChops.subtract(im, ImageChops.constant(im, 10))
-        #return ImageOps.autocontrast(im, cutoff=1, ignore=None)
-        return im #ImageOps.equalize(im)
+    im = Image.open(image_path)
+    if blur:
+        #print('warning: Loading with blur')
+        im = im.filter(ImageFilter.BLUR)
+    #im = ImageChops.subtract(im, ImageChops.constant(im, 10))
+    #return ImageOps.autocontrast(im, cutoff=1, ignore=None)
+    return im #ImageOps.equalize(im)
 
 
 def load_images_as_tensor(image_paths, dtype=np.uint8, blur=False):
@@ -172,7 +168,7 @@ def convert_tensor_to_rgb(t, channels=range(1,7), vmax=255, rgb_map=RGB_MAP):
 
 # MAIN
 
-channels = (1,2,4)
+channels = (1,2,3)
 #channels = (4,5,6)
 cell='U2OS'
 
@@ -368,14 +364,14 @@ for i in range(df.shape[0]):
         if 1==1:
             t = np.concatenate((t2,t1),axis=1)
             x = convert_tensor_to_rgb(t,channels=channels, rgb_map = RGB_MAP)
-            cv2.imwrite(f'{destination}/{records[i].sirna}-{records[i].id_code}-{records[i].plate}_{max_thr}_{max_thr2}.jpg',x)
+            cv2.imwrite(f'{destination}/{records[i].sirna}-{records[i].id_code}-{records[i].plate}_{site}_{max_thr}_{max_thr2}.jpg',x)
 
         import imageio
         directory = f'{destination}/{records[i].experiment}/Plate{records[i].plate}'
         if not os.path.exists(directory):
             os.makedirs(directory)
-        data8 = np.uint8(t1[:,:,0])
-        imageio.imwrite(f'{directory}/{records[i].well}_s{site}_w1.png', data8)
+        #data8 = np.uint8(t1[:,:,0])
+        #imageio.imwrite(f'{directory}/{records[i].well}_s{site}_w1.png', data8)
     
 
     #print(correctionF)

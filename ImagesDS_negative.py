@@ -9,13 +9,13 @@ import random
 from PIL import Image
 import PIL.ImageChops as ImageChops
 import PIL.ImageOps as ImageOps
-
+from scipy import ndimage
 
 import torchvision
 from torchvision import transforms as T
 
 class ImagesDS(D.Dataset):
-    def __init__(self, csv_file, img_dir, mode='train', useBothSites=True, channels=[1, 2, 3, 4, 5, 6], useOnly=0):
+    def __init__(self, csv_file, img_dir, mode='train', useBothSites=True, channels=[1, 2, 3, 4, 5, 6], useOnly=0, withoutControls=False):
 
         df = pd.read_csv(csv_file)
         self.records = df.to_records(index=False)
@@ -23,6 +23,7 @@ class ImagesDS(D.Dataset):
         self.mode = mode
         self.img_dir = img_dir
         self.useBothSites = useBothSites
+        self.withoutControls = withoutControls
         Nexamples = df.shape[0]
         if useOnly > 0:
             Nexamples = min(Nexamples, useOnly)
@@ -114,13 +115,14 @@ class ImagesDS(D.Dataset):
         return img
 
     @staticmethod
-    def _load_img_as_tensor(file_name, r1, r2, r3, noiseLevel=0):
-        output_size = 224
+    def _load_img_as_tensor(file_name, r1, r2, r3, startx=0, starty=0, noiseLevel=0,size=512):
+        #output_size = 336
+        output_size = 512
 
         with Image.open(file_name) as img:
-            # minV, maxV = img.getextrema()
-            # print (minV, maxV, file_name)
-            # normalize = T.Normalize(mean=[minV,],std=[(maxV-minV/255),])
+
+            #img = T.functional.crop(img, startx, starty, size, size)
+            #img = T.functional.resize(img,output_size)
 
             angle = r1 * 90
 
@@ -133,27 +135,48 @@ class ImagesDS(D.Dataset):
             # remove noise (all intensity lower than 10)
             if noiseLevel > 0:
                 img = ImageChops.subtract(img, ImageChops.constant(img, noiseLevel))
+            
+            
             # Contrast stretching
             img = ImageOps.autocontrast(img, cutoff=1, ignore=None)
-            # i = np.random.uniform(0,199)
-            # j = np.random.uniform(0,199)
-            # img = T.functional.crop(img, i, j, 312, 312)
 
-            # img = T.functional.resize(img,output_size)
+            # VERY VERY slow
+            #img = ndimage.median_filter(img, 3)
+
+            #m1 = np.percentile(img,1)
+            #m99 = np.percentile(img,99)
+
+            #print(f'GG: {m1}  {m99}')
+            #img = np.where(img<m1,m1,img)
+            #img = np.where(img>m99,m99,img)
+
 
             # transform = T.Compose([T.ToTensor(), normalize])
             # transform = T.Compose([T.RandomVerticalFlip(), T.RandomHorizontalFlip(), T.ToTensor(), normalize])
-            transform = T.ToTensor()
+            img = T.ToTensor()(img)
 
-            return transform(img)
+            #iMin = torch.min(img)
+            #iMax = torch.max(img)
+            #print(f'MM: {iMin}   {iMax}')
+            #img = (img - iMin) / (iMax-iMin + 1e-8)
+            
+            
+            #img = (img - torch.mean(img)) / torch.std(img)
+            #print(f'FF: {file_name}  {torch.min(img)}   {torch.max(img)}')
+            #img = img.type(torch.FloatTensor)
+            
+            return img
 
     def _get_img_path(self, index, channel, site=1, negative=False):
+        
+        if site == None:
+            site = (index % 2) + 1
+        # otherwise use site from the input parameter
+
         if self.useBothSites:
             my_index = index // 2
-            site = (index % 2) + 1
         else:
             my_index = index
-            # use site from the input parameter
 
         experiment, well, plate = self.records[my_index].experiment, self.records[my_index].well, self.records[
             my_index].plate
@@ -164,14 +187,17 @@ class ImagesDS(D.Dataset):
         mode = self.mode
         if self.mode == 'val':
             mode = 'train'
+        #if mode == 'train':
+        #    mode = 'new_train'
         return '/'.join([self.img_dir, mode, experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])
 
     def __getitem__(self, index):
-        GETBOTHSITES = 1
+        GETBOTHSITES = 0
 
-        paths = [self._get_img_path(index, ch) for ch in self.channels]
-        if GETBOTHSITES == 1:
-            paths2 = [self._get_img_path(index, ch, negative=True) for ch in self.channels]
+        paths = [self._get_img_path(index, ch, site=None) for ch in self.channels]
+        if GETBOTHSITES == 1 and self.withoutControls==False:
+            randomSite = random.randint(1, 2)
+            paths2 = [self._get_img_path(index, ch, negative=True, site = randomSite) for ch in self.channels]
 
         if self.useBothSites:
             dd = 2
@@ -193,33 +219,47 @@ class ImagesDS(D.Dataset):
         normalize = T.Normalize(mean=[0.485, 0.485, 0.485, 0.485, 0.485, 0.485, ],
                                 std=[0.229, 0.229, 0.229, 0.229, 0.229, 0.229, ])
 
-        r1 = random.randint(0, 4)
-        r2 = random.randint(0, 2)
-        r3 = random.randint(0, 2)
-        img = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths])
+        r1 = random.randint(0, 3)
+        r2 = random.randint(0, 1)
+        r3 = random.randint(0, 1)
+        #startx=random.randint(0, 175)
+        #starty=random.randint(0, 175)
+        #size=random.randint(336, 511-max(startx,starty))
+        startx = 0
+        starty = 0
+        size=512
+        img = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3, startx=startx, starty=starty, size=size) for img_path in paths])
         #if self.mode=='train':
         #img = ImagesDS._add_noise(img)
            #img2 = ImagesDS._add_noise(img)
-           #print(np.corrcoef(img1[1,:,:].numpy().reshape((262144,)),img2[1,:,:].numpy().reshape((1,262144))))	   
+           #print(np.corrcoef(img1[1,:,:].numpy().reshape((262144,)),img2[1,:,:].numpy().reshape((1,262144))))   
+        
         img = ImagesDS._correct_overlaping_channels(img)
         img = normalize(img)
 
         if GETBOTHSITES == 1:
-            r1 = random.randint(0, 4)
-            r2 = random.randint(0, 2)
-            r3 = random.randint(0, 2)
-            img2 = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths2])
-            #if self.mode=='train':
-            #img2 = ImagesDS._add_noise(img2)
-            img2 = ImagesDS._correct_overlaping_channels(img2)
-            img2 = normalize(img2)
+            orderTensor = torch.FloatTensor([[1], [-1]])
+            if self.withoutControls == False:
+                r1 = random.randint(0, 3)
+                r2 = random.randint(0, 1)
+                r3 = random.randint(0, 1)
+                img2 = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3, startx=startx, starty=starty, size=size) for img_path in paths2])
+                img2 = ImagesDS._correct_overlaping_channels(img2)
+                img2 = normalize(img2)
 
-            if self.mode == 'train':
-                return [img, img2, cellLine], self.records[index // dd].sirna
-            elif self.mode =='val':
-                return [img, img2, cellLine], self.records[index // dd].sirna
+                order = random.randint(0, 1)
+                returnVal = [img, img2, orderTensor]
+                if order == 1:
+                    orderTensor = torch.FloatTensor([[-1], [1]])
+                    returnVal = [img2, img, orderTensor]
             else:
-                return [img, img2, cellLine], 0
+                returnVal = [img, img, orderTensor]
+            
+            if self.mode == 'train' or self.mode == 'val':
+                return returnVal, self.records[index // dd].sirna
+            else:
+                return returnVal, 0
+  
         else:
             if self.mode == 'train':
                 return [img, cellLine], self.records[index // dd].sirna

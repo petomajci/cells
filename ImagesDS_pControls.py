@@ -142,33 +142,45 @@ class ImagesDS(D.Dataset):
             # img = T.functional.resize(img,output_size)
 
             # transform = T.Compose([T.ToTensor(), normalize])
+            # transform = T.Compose([T.RandomVerticalFlip(), T.RandomHorizontalFlip(), T.ToTensor(), normalize])
             transform = T.ToTensor()
 
             return transform(img)
 
-    def _get_img_path(self, index, channel, site=1):
+    def _get_img_path(self, index, channel, site=1, negative=False):
+        
+	if site == none:
+            site = (index % 2) + 1
+        # otherwise use site from the input parameter
+
         if self.useBothSites:
             my_index = index // 2
-            site = (index % 2) + 1
         else:
             my_index = index
-            # use site from the input parameter
 
         experiment, well, plate = self.records[my_index].experiment, self.records[my_index].well, self.records[
             my_index].plate
 
+        if negative==True:
+            well = self.records[my_index].negative
+
         mode = self.mode
         if self.mode == 'val':
             mode = 'train'
-        #return '/'.join([self.img_dir, mode, experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])
-        return '/'.join([self.img_dir, 'train', experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])  # all files were moved to train
+        return '/'.join([self.img_dir, mode, experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])
+
+    def _getPositiveControlsTensor():
+        data_df = pd.read_csv('/'.join([self.img_dir, mode, experiment, f'Plate{plate}', 'positive_controls.csv'],header=None)
+        data_tensor = torch.tensor(data_df.values)
+
 
     def __getitem__(self, index):
-        GETBOTHSITES = 0
+        GETBOTHSITES = 1
 
-        paths = [self._get_img_path(index, ch) for ch in self.channels]
+        paths = [self._get_img_path(index, ch, site=none) for ch in self.channels]
         if GETBOTHSITES == 1:
-            paths2 = [self._get_img_path(index, ch, site=2) for ch in self.channels]
+            randomSite = random.randint(1, 3)
+            paths2 = [self._get_img_path(index, ch, negative=True, site = randomSite) for ch in self.channels]
 
         if self.useBothSites:
             dd = 2
@@ -197,7 +209,7 @@ class ImagesDS(D.Dataset):
         #if self.mode=='train':
         #img = ImagesDS._add_noise(img)
            #img2 = ImagesDS._add_noise(img)
-           #print(np.corrcoef(img1[1,:,:].numpy().reshape((262144,)),img2[1,:,:].numpy().reshape((1,262144))))	   
+           #print(np.corrcoef(img1[1,:,:].numpy().reshape((262144,)),img2[1,:,:].numpy().reshape((1,262144))))   
         img = ImagesDS._correct_overlaping_channels(img)
         img = normalize(img)
 
@@ -211,12 +223,16 @@ class ImagesDS(D.Dataset):
             img2 = ImagesDS._correct_overlaping_channels(img2)
             img2 = normalize(img2)
 
-            if self.mode == 'train':
-                return [img, img2, cellLine], self.records[index // dd].sirna
-            elif self.mode =='val':
-                return [img, img2, cellLine], self.records[index // dd].sirna
+            order = random.randint(0, 2)
+            orderTensor = torch.FloatTensor([[1], [-1]])
+            returnVal = [img, img2, orderTensor]
+            if order == 1:
+               orderTensor = torch.FloatTensor([[-1], [1]])
+               returnVal = [img2, img, orderTensor]
+            if self.mode == 'train' or self.mode == 'val':
+                   return returnVal, self.records[index // dd].sirna
             else:
-                return [img, img2, cellLine], 0
+                return returnVal, 0
         else:
             if self.mode == 'train':
                 return [img, cellLine], self.records[index // dd].sirna
