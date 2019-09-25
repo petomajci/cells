@@ -28,10 +28,11 @@ Nepochs = sys.argv[4]
 
 path_data = '../../input'
 device = 'cuda'
-batch_size = 11   # was 16
+batch_size = 32   # was 52 for densenet121
 
-ds = ImagesDS(trainFile, path_data, useBothSites=False)#, useOnly=500)
-ds_train, ds_val = trainTestSplit(ds, val_share=0.02436053)
+ds = ImagesDS(trainFile, path_data, useBothSites=True)#, useOnly=500)
+ds_train, ds_val = trainTestSplit(ds, val_share=0.01)
+#ds_train, ds_val = trainTestSplit(ds, val_share=0.146829)
 
 classes = 1108 # 30 - HUVEC30 # controls 31 # 61 - HUVEC+CONTROLS # 1108
 
@@ -55,7 +56,7 @@ del loader, vloader
 #criterion = nn.BCEWithLogitsLoss()
 criterion = nn.CrossEntropyLoss()
 
-lr=0.001
+lr=0.001#0.00015
 #optimizer = torch.optim.Adam(model.parameters(), lr=1.5625e-05, weight_decay=0)
 optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.05)
 #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.01, momentum=0)
@@ -66,7 +67,7 @@ scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.75)
 
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
-    USEBOTHSITES = 1
+    USEBOTHSITES = 0
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
@@ -113,10 +114,10 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 
                     _, preds = torch.max(outputs, 1)
 
-                    #loss = criterion(outputs, labels)
-                    target = torch.zeros_like(outputs, device=device)
-                    target[np.arange(inputs[0].size(0)), labels] = 1
-                    loss = criterion(outputs, target)
+                    loss = criterion(outputs, labels)
+                    #target = torch.zeros_like(outputs, device=device)
+                    #target[np.arange(inputs[0].size(0)), labels] = 1
+                    #loss = criterion(outputs, target)
 
                     # backward + optimize only if in training phase
                     if phase == 'train':
@@ -142,6 +143,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 torch.save(model.state_dict(), f"best_model_regular_acc{groupCode}.bin")
 
             if phase == 'val':
+                torch.save(model.state_dict(), f'final_model_{groupCode}.bin')
                 scheduler.step()
 
         print()
@@ -157,4 +159,4 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 
 
 model = train_model(model, criterion, optimizer, scheduler, num_epochs=int(Nepochs))
-torch.save(model.state_dict(), f'final_model_{groupCode}.bin')
+#torch.save(model.state_dict(), f'final_model_{groupCode}.bin')

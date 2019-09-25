@@ -114,13 +114,13 @@ class ImagesDS(D.Dataset):
         return img
 
     @staticmethod
-    def _load_img_as_tensor(file_name, r1, r2, r3, noiseLevel=0):
-        output_size = 224
+    def _load_img_as_tensor(file_name, r1, r2, r3, startx=0, starty=0, noiseLevel=0, size=512):
+        output_size = 336
 
         with Image.open(file_name) as img:
-            # minV, maxV = img.getextrema()
-            # print (minV, maxV, file_name)
-            # normalize = T.Normalize(mean=[minV,],std=[(maxV-minV/255),])
+
+            img = T.functional.crop(img, startx, starty, size, size)
+            #img = T.functional.resize(img,output_size)
 
             angle = r1 * 90
 
@@ -133,15 +133,10 @@ class ImagesDS(D.Dataset):
             # remove noise (all intensity lower than 10)
             if noiseLevel > 0:
                 img = ImageChops.subtract(img, ImageChops.constant(img, noiseLevel))
+            
             # Contrast stretching
             img = ImageOps.autocontrast(img, cutoff=1, ignore=None)
-            # i = np.random.uniform(0,199)
-            # j = np.random.uniform(0,199)
-            # img = T.functional.crop(img, i, j, 312, 312)
 
-            # img = T.functional.resize(img,output_size)
-
-            # transform = T.Compose([T.ToTensor(), normalize])
             transform = T.ToTensor()
 
             return transform(img)
@@ -157,10 +152,6 @@ class ImagesDS(D.Dataset):
         experiment, well, plate = self.records[my_index].experiment, self.records[my_index].well, self.records[
             my_index].plate
 
-        mode = self.mode
-        if self.mode == 'val':
-            mode = 'train'
-        #return '/'.join([self.img_dir, mode, experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])
         return '/'.join([self.img_dir, 'train', experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])  # all files were moved to train
 
     def __getitem__(self, index):
@@ -168,7 +159,15 @@ class ImagesDS(D.Dataset):
 
         paths = [self._get_img_path(index, ch) for ch in self.channels]
         if GETBOTHSITES == 1:
+            paths = [self._get_img_path(index, ch, site=1) for ch in self.channels]
             paths2 = [self._get_img_path(index, ch, site=2) for ch in self.channels]
+        else:
+            if self.useBothSites:
+                site = (index % 2) + 1
+            else:
+                site = self.site
+            paths = [self._get_img_path(index, ch, site=site) for ch in self.channels]
+
 
         if self.useBothSites:
             dd = 2
@@ -193,7 +192,11 @@ class ImagesDS(D.Dataset):
         r1 = random.randint(0, 3)
         r2 = random.randint(0, 1)
         r3 = random.randint(0, 1)
-        img = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths])
+        startx=random.randint(0, 175)
+        starty=random.randint(0, 175)
+        #size=random.randint(336, 511-max(startx,starty))
+        size = 336
+        img = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3,startx=startx, starty=starty, size=size) for img_path in paths])
         #if self.mode=='train':
         #img = ImagesDS._add_noise(img)
            #img2 = ImagesDS._add_noise(img)
@@ -205,7 +208,11 @@ class ImagesDS(D.Dataset):
             r1 = random.randint(0, 3)
             r2 = random.randint(0, 1)
             r3 = random.randint(0, 1)
-            img2 = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3) for img_path in paths2])
+            startx=random.randint(0, 175)
+            starty=random.randint(0, 175)
+            #size=random.randint(336, 511-max(startx,starty))
+            size = 336
+            img2 = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3, startx=startx, starty=starty, size=size) for img_path in paths2])
             #if self.mode=='train':
             #img2 = ImagesDS._add_noise(img2)
             img2 = ImagesDS._correct_overlaping_channels(img2)
