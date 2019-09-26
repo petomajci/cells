@@ -116,12 +116,11 @@ class ImagesDS(D.Dataset):
 
     @staticmethod
     def _load_img_as_tensor(file_name, r1, r2, r3, startx=0, starty=0, noiseLevel=0,size=512):
-        #output_size = 336
-        output_size = 512
+        output_size = 336
 
         with Image.open(file_name) as img:
 
-            #img = T.functional.crop(img, startx, starty, size, size)
+            img = T.functional.crop(img, startx, starty, size, size)
             #img = T.functional.resize(img,output_size)
 
             angle = r1 * 90
@@ -154,17 +153,6 @@ class ImagesDS(D.Dataset):
             # transform = T.Compose([T.ToTensor(), normalize])
             # transform = T.Compose([T.RandomVerticalFlip(), T.RandomHorizontalFlip(), T.ToTensor(), normalize])
             img = T.ToTensor()(img)
-
-            #iMin = torch.min(img)
-            #iMax = torch.max(img)
-            #print(f'MM: {iMin}   {iMax}')
-            #img = (img - iMin) / (iMax-iMin + 1e-8)
-            
-            
-            #img = (img - torch.mean(img)) / torch.std(img)
-            #print(f'FF: {file_name}  {torch.min(img)}   {torch.max(img)}')
-            #img = img.type(torch.FloatTensor)
-            
             return img
 
     def _get_img_path(self, index, channel, site=1, negative=False):
@@ -184,15 +172,10 @@ class ImagesDS(D.Dataset):
         if negative==True:
             well = self.records[my_index].negative
 
-        mode = self.mode
-        if self.mode == 'val':
-            mode = 'train'
-        #if mode == 'train':
-        #    mode = 'new_train'
-        return '/'.join([self.img_dir, mode, experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])
+        return '/'.join([self.img_dir, 'train', experiment, f'Plate{plate}', f'{well}_s{site}_w{channel}.png'])  # all files were moved to train
 
     def __getitem__(self, index):
-        GETBOTHSITES = 0
+        GETBOTHSITES = 1
 
         paths = [self._get_img_path(index, ch, site=None) for ch in self.channels]
         if GETBOTHSITES == 1 and self.withoutControls==False:
@@ -222,18 +205,10 @@ class ImagesDS(D.Dataset):
         r1 = random.randint(0, 3)
         r2 = random.randint(0, 1)
         r3 = random.randint(0, 1)
-        #startx=random.randint(0, 175)
-        #starty=random.randint(0, 175)
-        #size=random.randint(336, 511-max(startx,starty))
-        startx = 0
-        starty = 0
-        size=512
+        startx=random.randint(0, 175)
+        starty=random.randint(0, 175)
+        size=336
         img = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3, startx=startx, starty=starty, size=size) for img_path in paths])
-        #if self.mode=='train':
-        #img = ImagesDS._add_noise(img)
-           #img2 = ImagesDS._add_noise(img)
-           #print(np.corrcoef(img1[1,:,:].numpy().reshape((262144,)),img2[1,:,:].numpy().reshape((1,262144))))   
-        
         img = ImagesDS._correct_overlaping_channels(img)
         img = normalize(img)
 
@@ -243,17 +218,20 @@ class ImagesDS(D.Dataset):
                 r1 = random.randint(0, 3)
                 r2 = random.randint(0, 1)
                 r3 = random.randint(0, 1)
+                startx=random.randint(0, 175)
+                starty=random.randint(0, 175)
+                size=336
                 img2 = torch.cat([self._load_img_as_tensor(img_path, r1, r2, r3, startx=startx, starty=starty, size=size) for img_path in paths2])
                 img2 = ImagesDS._correct_overlaping_channels(img2)
                 img2 = normalize(img2)
 
                 order = random.randint(0, 1)
-                returnVal = [img, img2, orderTensor]
+                returnVal = [img, img2, cellLine, orderTensor]
                 if order == 1:
                     orderTensor = torch.FloatTensor([[-1], [1]])
-                    returnVal = [img2, img, orderTensor]
+                    returnVal = [img2, img, cellLine, orderTensor]
             else:
-                returnVal = [img, img, orderTensor]
+                returnVal = [img, img, cellLine, orderTensor]
             
             if self.mode == 'train' or self.mode == 'val':
                 return returnVal, self.records[index // dd].sirna

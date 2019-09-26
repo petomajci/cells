@@ -24,11 +24,12 @@ import sys
 groupCode = sys.argv[1]
 modelFile = sys.argv[2]
 trainFile = sys.argv[3]
-Nepochs = sys.argv[4]
+Nepochs = int(sys.argv[4])
+layers = int(sys.argv[5])
 
 path_data = '../../input'
 device = 'cuda'
-batch_size = 32   # was 52 for densenet121
+batch_size = 52   # was 52 for densenet121
 
 ds = ImagesDS(trainFile, path_data, useBothSites=True)#, useOnly=500)
 ds_train, ds_val = trainTestSplit(ds, val_share=0.01)
@@ -36,7 +37,7 @@ ds_train, ds_val = trainTestSplit(ds, val_share=0.01)
 
 classes = 1108 # 30 - HUVEC30 # controls 31 # 61 - HUVEC+CONTROLS # 1108
 
-model = DensNet(num_classes=classes, pretrained=True)
+model = DensNet(num_classes=classes, pretrained=True, layers=layers)
 if modelFile != 'none':
     model.load_state_dict(torch.load(f'{modelFile}'))
     model.eval()
@@ -56,7 +57,8 @@ del loader, vloader
 #criterion = nn.BCEWithLogitsLoss()
 criterion = nn.CrossEntropyLoss()
 
-lr=0.001#0.00015
+lr=2.8e-5#0.001#0.00015
+lr=6.6e-6
 #optimizer = torch.optim.Adam(model.parameters(), lr=1.5625e-05, weight_decay=0)
 optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.05)
 #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.01, momentum=0)
@@ -158,5 +160,5 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     return model
 
 
-model = train_model(model, criterion, optimizer, scheduler, num_epochs=int(Nepochs))
+model = train_model(model, criterion, optimizer, scheduler, num_epochs=Nepochs)
 #torch.save(model.state_dict(), f'final_model_{groupCode}.bin')

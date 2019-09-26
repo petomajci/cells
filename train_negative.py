@@ -24,19 +24,20 @@ import sys
 groupCode = sys.argv[1]
 modelFile = sys.argv[2]
 trainFile = sys.argv[3]
-Nepochs = sys.argv[4]
+Nepochs = int(sys.argv[4])
+layers = int(sys.argv[5])
 
 path_data = '../../input'
 device = 'cuda'
-batch_size = 11   # was 16
+batch_size = 26   # was 16
 
 ds = ImagesDS(trainFile, path_data, useBothSites=True)#, useOnly=500)
-ds_train, ds_val = trainTestSplit(ds, val_share=0.117234)
+ds_train, ds_val = trainTestSplit(ds, val_share=0.01)
 
 
 classes = 1108 # 30 - HUVEC30 # controls 31 # 61 - HUVEC+CONTROLS # 1108
 
-model = DensNet(num_classes=classes, pretrained=True)
+model = DensNet(num_classes=classes, pretrained=True, layers=layers)
 if modelFile != 'none':
     model.load_state_dict(torch.load(f'{modelFile}'))
 model.to(device)
@@ -55,7 +56,7 @@ del loader, vloader
 #criterion = nn.BCEWithLogitsLoss()
 criterion = nn.CrossEntropyLoss()
 
-lr = 0.001
+lr = 1e-4
 #optimizer = torch.optim.Adam(model.parameters(), lr=1.5625e-05, weight_decay=0)
 optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.05)
 #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.01, momentum=0)
@@ -66,7 +67,7 @@ scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.75)
 
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
-    USEBOTHSITES = 0
+    USEBOTHSITES = 1
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
@@ -96,6 +97,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 inputs[1] = inputs[1].to(device)
                 if USEBOTHSITES==1:
                     inputs[2] = inputs[2].to(device)
+                    inputs[3] = inputs[3].to(device)
                 #print(labels)
                 labels = labels.to(device)
 
@@ -142,6 +144,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 torch.save(model.state_dict(), f"best_model_regular_acc{groupCode}.bin")
 
             if phase == 'val':
+                torch.save(model.state_dict(), f'final_model_{groupCode}.bin')
                 scheduler.step()
 
         print()
@@ -156,5 +159,5 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     return model
 
 
-model = train_model(model, criterion, optimizer, scheduler, num_epochs=int(Nepochs))
-torch.save(model.state_dict(), f'final_model_{groupCode}.bin')
+model = train_model(model, criterion, optimizer, scheduler, num_epochs=Nepochs)
+#torch.save(model.state_dict(), f'final_model_{groupCode}.bin')

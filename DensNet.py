@@ -5,10 +5,14 @@ import torchvision
 import torch.nn.functional as F
 
 class DensNet(nn.Module):
-    def __init__(self, num_classes=1000, num_channels=6, pretrained=True):
+    def __init__(self, num_classes=1000, num_channels=6, pretrained=True, layers=201):
         super().__init__()
-        #preloaded = torchvision.models.densenet121(pretrained=pretrained)
-        preloaded = torchvision.models.densenet201(pretrained=pretrained)
+        if layers == 121:
+            print("preloading 121")
+            preloaded = torchvision.models.densenet121(pretrained=pretrained)
+        else:
+            print("preloading 201")
+            preloaded = torchvision.models.densenet201(pretrained=pretrained)
         #preloaded = torchvision.models.DenseNet(16, (6, 12, 24, 16), 64)
 
         # Freeze model parameters
@@ -27,7 +31,7 @@ class DensNet(nn.Module):
             #self.features.conv0.weight = nn.Parameter(torch.cat((w,
             #                        0.5*(w[:,:1,:,:]+w[:,2:,:,:])),dim=1))
 
-        self.classifier = nn.Bilinear(1920,4, num_classes, bias=True) #grow=16,121 ->516, 121 -> 1024, 201->1920, 264->2688
+        self.classifier = nn.Bilinear(preloaded.classifier.weight.shape[1],4, num_classes, bias=True) #grow=16,121 ->516, 121 -> 1024, 201->1920, 264->2688
         del preloaded
 
     def forward(self, x):
